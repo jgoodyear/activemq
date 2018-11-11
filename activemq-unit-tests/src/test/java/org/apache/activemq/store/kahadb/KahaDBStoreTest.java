@@ -50,7 +50,7 @@ public class KahaDBStoreTest {
         store.setMaxAsyncJobs(100);
         store.setDeleteAllMessages(true);
         store.start();
-        underTest = store.new KahaDBMessageStore(destination);
+        underTest = store.new KahaDBMessageStore(store, destination);
         underTest.start();
         message = new ActiveMQMessage();
         message.setDestination(destination);

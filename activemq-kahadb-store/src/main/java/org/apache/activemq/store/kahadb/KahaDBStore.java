@@ -28,18 +28,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.activemq.broker.ConnectionContext;
 import org.apache.activemq.broker.region.BaseDestination;
@@ -109,8 +104,8 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
     private SystemUsage usageManager;
     private LinkedBlockingQueue<Runnable> asyncQueueJobQueue;
     private LinkedBlockingQueue<Runnable> asyncTopicJobQueue;
-    Semaphore globalQueueSemaphore;
-    Semaphore globalTopicSemaphore;
+    public Semaphore globalQueueSemaphore;
+    public Semaphore globalTopicSemaphore;
     private boolean concurrentStoreAndDispatchQueues = true;
     // when true, message order may be compromised when cache is exhausted if store is out
     // or order w.r.t cache
@@ -417,13 +412,15 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
         protected KahaDestination dest;
         private final int maxAsyncJobs;
         private final Semaphore localDestinationSemaphore;
+        private final KahaDBStore kahaDBStore;
         protected final Set<String> ackedAndPrepared = new HashSet<>();
         protected final Set<String> rolledBackAcks = new HashSet<>();
 
-        double doneTasks, canceledTasks = 0;
+        public double doneTasks, canceledTasks = 0;
 
-        public KahaDBMessageStore(ActiveMQDestination destination) {
+        public KahaDBMessageStore(KahaDBStore kahaDBStore, ActiveMQDestination destination) {
             super(destination);
+            this.kahaDBStore = kahaDBStore;
             this.dest = convert(destination);
             this.maxAsyncJobs = getMaxAsyncJobs();
             this.localDestinationSemaphore = new Semaphore(this.maxAsyncJobs);
@@ -472,7 +469,7 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
                 throws IOException {
             if (isConcurrentStoreAndDispatchQueues()) {
                 message.beforeMarshall(wireFormat);
-                StoreQueueTask result = new StoreQueueTask(this, context, message);
+                StoreQueueTask result = new StoreQueueTask(kahaDBStore,this, context, message);
                 ListenableFuture<Object> future = result.getFuture();
                 message.getMessageId().setFutureOrSequenceLong(future);
                 message.setRecievedByDFBridge(true); // flag message as concurrentStoreAndDispatch
@@ -835,13 +832,15 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
         }
     }
 
-    class KahaDBTopicMessageStore extends KahaDBMessageStore implements TopicMessageStore {
+    public class KahaDBTopicMessageStore extends KahaDBMessageStore implements TopicMessageStore {
         private final AtomicInteger subscriptionCount = new AtomicInteger();
         protected final MessageStoreSubscriptionStatistics messageStoreSubStats =
                 new MessageStoreSubscriptionStatistics(isEnableSubscriptionStatistics());
+        private final KahaDBStore kahaDBStore;
 
-        public KahaDBTopicMessageStore(ActiveMQTopic destination) throws IOException {
-            super(destination);
+        public KahaDBTopicMessageStore(KahaDBStore kahaDBStore, ActiveMQTopic destination) throws IOException {
+            super(kahaDBStore, destination);
+            this.kahaDBStore = kahaDBStore;
             this.subscriptionCount.set(getAllSubscriptions().length);
             if (isConcurrentStoreAndDispatchTopics()) {
                 asyncTopicMaps.add(asyncTaskMap);
@@ -859,7 +858,7 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
                 throws IOException {
             if (isConcurrentStoreAndDispatchTopics()) {
                 message.beforeMarshall(wireFormat);
-                StoreTopicTask result = new StoreTopicTask(this, context, message, subscriptionCount.get());
+                StoreTopicTask result = new StoreTopicTask(kahaDBStore,this, context, message, subscriptionCount.get());
                 result.aquireLocks();
                 addTopicTask(this, result);
                 return result.getFuture();
@@ -1193,7 +1192,7 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
         String key = key(convert(destination));
         MessageStore store = storeCache.get(key(convert(destination)));
         if (store == null) {
-            final MessageStore queueStore = this.transactionStore.proxy(new KahaDBMessageStore(destination));
+            final MessageStore queueStore = this.transactionStore.proxy(new KahaDBMessageStore(this, destination));
             store = storeCache.putIfAbsent(key, queueStore);
             if (store == null) {
                 store = queueStore;
@@ -1208,7 +1207,7 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
         String key = key(convert(destination));
         MessageStore store = storeCache.get(key(convert(destination)));
         if (store == null) {
-            final TopicMessageStore topicStore = this.transactionStore.proxy(new KahaDBTopicMessageStore(destination));
+            final TopicMessageStore topicStore = this.transactionStore.proxy(new KahaDBTopicMessageStore(this, destination));
             store = storeCache.putIfAbsent(key, topicStore);
             if (store == null) {
                 store = topicStore;
@@ -1444,219 +1443,6 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
         @Override
         public String toString() {
             return destination.getPhysicalName() + "-" + id;
-        }
-    }
-
-    public interface StoreTask {
-        public boolean cancel();
-
-        public void aquireLocks();
-
-        public void releaseLocks();
-    }
-
-    class StoreQueueTask implements Runnable, StoreTask {
-        protected final Message message;
-        protected final ConnectionContext context;
-        protected final KahaDBMessageStore store;
-        protected final InnerFutureTask future;
-        protected final AtomicBoolean done = new AtomicBoolean();
-        protected final AtomicBoolean locked = new AtomicBoolean();
-
-        public StoreQueueTask(KahaDBMessageStore store, ConnectionContext context, Message message) {
-            this.store = store;
-            this.context = context;
-            this.message = message;
-            this.future = new InnerFutureTask(this);
-        }
-
-        public ListenableFuture<Object> getFuture() {
-            return this.future;
-        }
-
-        @Override
-        public boolean cancel() {
-            if (this.done.compareAndSet(false, true)) {
-                return this.future.cancel(false);
-            }
-            return false;
-        }
-
-        @Override
-        public void aquireLocks() {
-            if (this.locked.compareAndSet(false, true)) {
-                try {
-                    globalQueueSemaphore.acquire();
-                    store.acquireLocalAsyncLock();
-                    message.incrementReferenceCount();
-                } catch (InterruptedException e) {
-                    LOG.warn("Failed to aquire lock", e);
-                }
-            }
-
-        }
-
-        @Override
-        public void releaseLocks() {
-            if (this.locked.compareAndSet(true, false)) {
-                store.releaseLocalAsyncLock();
-                globalQueueSemaphore.release();
-                message.decrementReferenceCount();
-            }
-        }
-
-        @Override
-        public void run() {
-            this.store.doneTasks++;
-            try {
-                if (this.done.compareAndSet(false, true)) {
-                    this.store.addMessage(context, message);
-                    removeQueueTask(this.store, this.message.getMessageId());
-                    this.future.complete();
-                } else if (cancelledTaskModMetric > 0 && (++this.store.canceledTasks) % cancelledTaskModMetric == 0) {
-                    System.err.println(this.store.dest.getName() + " cancelled: "
-                            + (this.store.canceledTasks / this.store.doneTasks) * 100);
-                    this.store.canceledTasks = this.store.doneTasks = 0;
-                }
-            } catch (Throwable t) {
-                this.future.setException(t);
-                removeQueueTask(this.store, this.message.getMessageId());
-            }
-        }
-
-        protected Message getMessage() {
-            return this.message;
-        }
-
-        private class InnerFutureTask extends FutureTask<Object> implements ListenableFuture<Object>  {
-
-            private final AtomicReference<Runnable> listenerRef = new AtomicReference<>();
-
-            public InnerFutureTask(Runnable runnable) {
-                super(runnable, null);
-            }
-
-            public void setException(final Throwable e) {
-                super.setException(e);
-            }
-
-            public void complete() {
-                super.set(null);
-            }
-
-            @Override
-            public void done() {
-                fireListener();
-            }
-
-            @Override
-            public void addListener(Runnable listener) {
-                this.listenerRef.set(listener);
-                if (isDone()) {
-                    fireListener();
-                }
-            }
-
-            private void fireListener() {
-                Runnable listener = listenerRef.getAndSet(null);
-                if (listener != null) {
-                    try {
-                        listener.run();
-                    } catch (Exception ignored) {
-                        LOG.warn("Unexpected exception from future {} listener callback {}", this, listener, ignored);
-                    }
-                }
-            }
-        }
-    }
-
-    class StoreTopicTask extends StoreQueueTask {
-        private final int subscriptionCount;
-        private final List<String> subscriptionKeys = new ArrayList<String>(1);
-        private final KahaDBTopicMessageStore topicStore;
-        public StoreTopicTask(KahaDBTopicMessageStore store, ConnectionContext context, Message message,
-                int subscriptionCount) {
-            super(store, context, message);
-            this.topicStore = store;
-            this.subscriptionCount = subscriptionCount;
-
-        }
-
-        @Override
-        public void aquireLocks() {
-            if (this.locked.compareAndSet(false, true)) {
-                try {
-                    globalTopicSemaphore.acquire();
-                    store.acquireLocalAsyncLock();
-                    message.incrementReferenceCount();
-                } catch (InterruptedException e) {
-                    LOG.warn("Failed to aquire lock", e);
-                }
-            }
-        }
-
-        @Override
-        public void releaseLocks() {
-            if (this.locked.compareAndSet(true, false)) {
-                message.decrementReferenceCount();
-                store.releaseLocalAsyncLock();
-                globalTopicSemaphore.release();
-            }
-        }
-
-        /**
-         * add a key
-         *
-         * @param key
-         * @return true if all acknowledgements received
-         */
-        public boolean addSubscriptionKey(String key) {
-            synchronized (this.subscriptionKeys) {
-                this.subscriptionKeys.add(key);
-            }
-            return this.subscriptionKeys.size() >= this.subscriptionCount;
-        }
-
-        @Override
-        public void run() {
-            this.store.doneTasks++;
-            try {
-                if (this.done.compareAndSet(false, true)) {
-                    this.topicStore.addMessage(context, message);
-                    // apply any acks we have
-                    synchronized (this.subscriptionKeys) {
-                        for (String key : this.subscriptionKeys) {
-                            this.topicStore.doAcknowledge(context, key, this.message.getMessageId(), null);
-
-                        }
-                    }
-                    removeTopicTask(this.topicStore, this.message.getMessageId());
-                    this.future.complete();
-                } else if (cancelledTaskModMetric > 0 && this.store.canceledTasks++ % cancelledTaskModMetric == 0) {
-                    System.err.println(this.store.dest.getName() + " cancelled: "
-                            + (this.store.canceledTasks / this.store.doneTasks) * 100);
-                    this.store.canceledTasks = this.store.doneTasks = 0;
-                }
-            } catch (Throwable t) {
-                this.future.setException(t);
-                removeTopicTask(this.topicStore, this.message.getMessageId());
-            }
-        }
-    }
-
-    public class StoreTaskExecutor extends ThreadPoolExecutor {
-
-        public StoreTaskExecutor(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit timeUnit, BlockingQueue<Runnable> queue, ThreadFactory threadFactory) {
-            super(corePoolSize, maximumPoolSize, keepAliveTime, timeUnit, queue, threadFactory);
-        }
-
-        @Override
-        protected void afterExecute(Runnable runnable, Throwable throwable) {
-            super.afterExecute(runnable, throwable);
-
-            if (runnable instanceof StoreTask) {
-               ((StoreTask)runnable).releaseLocks();
-            }
         }
     }
 
