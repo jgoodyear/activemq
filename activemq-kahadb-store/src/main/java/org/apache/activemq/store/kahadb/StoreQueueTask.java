@@ -33,12 +33,12 @@ public class StoreQueueTask implements Runnable, StoreTask {
     protected final Message message;
     protected final ConnectionContext context;
     protected final KahaDBStore kahaDBStore;
-    protected final KahaDBStore.KahaDBMessageStore store;
+    protected final KahaDBMessageStore store;
     protected final StoreQueueTask.InnerFutureTask future;
     protected final AtomicBoolean done = new AtomicBoolean();
     protected final AtomicBoolean locked = new AtomicBoolean();
 
-    public StoreQueueTask(KahaDBStore kahaDBStore, KahaDBStore.KahaDBMessageStore store, ConnectionContext context, Message message) {
+    public StoreQueueTask(KahaDBStore kahaDBStore, KahaDBMessageStore store, ConnectionContext context, Message message) {
         this.kahaDBStore = kahaDBStore;
         this.store = store;
         this.context = context;

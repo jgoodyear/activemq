@@ -31,8 +31,8 @@ public class StoreTopicTask extends StoreQueueTask {
     private final int subscriptionCount;
     private final List<String> subscriptionKeys = new ArrayList<String>(1);
     protected final KahaDBStore kahaDBStore;
-    private final KahaDBStore.KahaDBTopicMessageStore topicStore;
-    public StoreTopicTask(KahaDBStore kahaDBStore, KahaDBStore.KahaDBTopicMessageStore store, ConnectionContext context, Message message,
+    private final KahaDBTopicMessageStore topicStore;
+    public StoreTopicTask(KahaDBStore kahaDBStore, KahaDBTopicMessageStore store, ConnectionContext context, Message message,
                           int subscriptionCount) {
         super(kahaDBStore, store, context, message);
         this.kahaDBStore = kahaDBStore;
