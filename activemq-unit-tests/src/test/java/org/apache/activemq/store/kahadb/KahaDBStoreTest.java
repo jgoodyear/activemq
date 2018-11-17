@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KahaDBStoreTest {
 
-    KahaDBStore.KahaDBMessageStore underTest;
+    KahaDBMessageStore underTest;
     KahaDBStore store;
     ActiveMQMessage message;
     ProducerId producerId = new ProducerId("1.1.1");
@@ -50,7 +50,7 @@ public class KahaDBStoreTest {
         store.setMaxAsyncJobs(100);
         store.setDeleteAllMessages(true);
         store.start();
-        underTest = store.new KahaDBMessageStore(store, destination);
+        underTest = new KahaDBMessageStore(store, destination);
         underTest.start();
         message = new ActiveMQMessage();
         message.setDestination(destination);
