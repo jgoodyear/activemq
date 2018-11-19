@@ -32,13 +32,16 @@ public class StoreTopicTask extends StoreQueueTask {
     private final List<String> subscriptionKeys = new ArrayList<String>(1);
     protected final KahaDBStore kahaDBStore;
     private final KahaDBTopicMessageStore topicStore;
+
+    private final StoreTaskCompletionListener storeTaskCompletionListener;
+
     public StoreTopicTask(KahaDBStore kahaDBStore, KahaDBTopicMessageStore store, ConnectionContext context, Message message,
-                          int subscriptionCount) {
-        super(kahaDBStore, store, context, message);
+                          int subscriptionCount, StoreTaskCompletionListener storeTaskCompletionListener) {
+        super(kahaDBStore, store, context, message, storeTaskCompletionListener);
         this.kahaDBStore = kahaDBStore;
         this.topicStore = store;
         this.subscriptionCount = subscriptionCount;
-
+        this.storeTaskCompletionListener = storeTaskCompletionListener;
     }
 
     @Override
@@ -78,9 +81,10 @@ public class StoreTopicTask extends StoreQueueTask {
 
     @Override
     public void run() {
-        this.store.doneTasks++;
         try {
             if (this.done.compareAndSet(false, true)) {
+                this.storeTaskCompletionListener.taskCompleted();
+
                 this.topicStore.addMessage(context, message);
                 // apply any acks we have
                 synchronized (this.subscriptionKeys) {
@@ -91,14 +95,16 @@ public class StoreTopicTask extends StoreQueueTask {
                 }
                 kahaDBStore.removeTopicTask(this.topicStore, this.message.getMessageId());
                 this.future.complete();
-            } else if (kahaDBStore.cancelledTaskModMetric > 0 && this.store.canceledTasks++ % kahaDBStore.cancelledTaskModMetric == 0) {
-                System.err.println(this.store.dest.getName() + " cancelled: "
-                        + (this.store.canceledTasks / this.store.doneTasks) * 100);
-                this.store.canceledTasks = this.store.doneTasks = 0;
+            } else {
+                this.storeTaskCompletionListener.taskCanceled();
             }
         } catch (Throwable t) {
             this.future.setException(t);
             kahaDBStore.removeTopicTask(this.topicStore, this.message.getMessageId());
         }
+    }
+
+    private double calcPercentage(long amount, long total) {
+        return ((double) amount / (double) total) * 100.0;
     }
 }
