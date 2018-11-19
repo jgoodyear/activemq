@@ -38,12 +38,17 @@ public class StoreQueueTask implements Runnable, StoreTask {
     protected final AtomicBoolean done = new AtomicBoolean();
     protected final AtomicBoolean locked = new AtomicBoolean();
 
-    public StoreQueueTask(KahaDBStore kahaDBStore, KahaDBMessageStore store, ConnectionContext context, Message message) {
+    private final StoreTaskCompletionListener storeTaskCompletionListener;
+
+    public StoreQueueTask(KahaDBStore kahaDBStore, KahaDBMessageStore store, ConnectionContext context, Message message,
+                          StoreTaskCompletionListener storeTaskCompletionListener) {
+
         this.kahaDBStore = kahaDBStore;
         this.store = store;
         this.context = context;
         this.message = message;
         this.future = new StoreQueueTask.InnerFutureTask(this);
+        this.storeTaskCompletionListener = storeTaskCompletionListener;
     }
 
     public ListenableFuture<Object> getFuture() {
@@ -83,16 +88,15 @@ public class StoreQueueTask implements Runnable, StoreTask {
 
     @Override
     public void run() {
-        this.store.doneTasks++;
         try {
             if (this.done.compareAndSet(false, true)) {
+                this.storeTaskCompletionListener.taskCompleted();
+
                 this.store.addMessage(context, message);
                 kahaDBStore.removeQueueTask(this.store, this.message.getMessageId());
                 this.future.complete();
-            } else if (kahaDBStore.cancelledTaskModMetric > 0 && (++this.store.canceledTasks) % kahaDBStore.cancelledTaskModMetric == 0) {
-                System.err.println(this.store.dest.getName() + " cancelled: "
-                        + (this.store.canceledTasks / this.store.doneTasks) * 100);
-                this.store.canceledTasks = this.store.doneTasks = 0;
+            } else {
+                this.storeTaskCompletionListener.taskCanceled();
             }
         } catch (Throwable t) {
             this.future.setException(t);
