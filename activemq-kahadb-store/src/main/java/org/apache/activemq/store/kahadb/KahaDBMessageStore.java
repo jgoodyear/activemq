@@ -31,11 +31,8 @@ import org.apache.activemq.store.kahadb.disk.journal.Location;
 import org.apache.activemq.store.kahadb.disk.page.Transaction;
 import org.apache.activemq.store.kahadb.data.KahaAddMessageCommand;
 import org.apache.activemq.store.kahadb.data.KahaDestination;
-import org.apache.activemq.store.kahadb.data.KahaDestination.DestinationType;
-import org.apache.activemq.store.kahadb.data.KahaLocation;
 import org.apache.activemq.store.kahadb.data.KahaRemoveDestinationCommand;
 import org.apache.activemq.store.kahadb.data.KahaRemoveMessageCommand;
-import org.apache.activemq.store.kahadb.data.KahaSubscriptionCommand;
 import org.apache.activemq.store.kahadb.data.KahaUpdateMessageCommand;
 import org.apache.activemq.usage.MemoryUsage;
 import org.slf4j.Logger;
@@ -63,7 +60,6 @@ public class KahaDBMessageStore extends AbstractMessageStore {
     protected final Set<String> ackedAndPrepared = new HashSet<>();
     protected final Set<String> rolledBackAcks = new HashSet<>();
 
-    public double doneTasks, canceledTasks = 0;
 
     public KahaDBMessageStore(KahaDBStore kahaDBStore, ActiveMQDestination destination) {
         super(destination);
@@ -116,7 +112,8 @@ public class KahaDBMessageStore extends AbstractMessageStore {
             throws IOException {
         if (kahaDBStore.isConcurrentStoreAndDispatchQueues()) {
             message.beforeMarshall(kahaDBStore.wireFormat);
-            StoreQueueTask result = new StoreQueueTask(kahaDBStore,this, context, message);
+            StoreQueueTask result = new StoreQueueTask(kahaDBStore,this, context, message,
+                                                       new KahaDBMessageStoreTaskCompletionListener());
             ListenableFuture<Object> future = result.getFuture();
             message.getMessageId().setFutureOrSequenceLong(future);
             message.setRecievedByDFBridge(true); // flag message as concurrentStoreAndDispatch
@@ -476,5 +473,42 @@ public class KahaDBMessageStore extends AbstractMessageStore {
         } finally {
             unlockAsyncJobQueue();
         }
+    }
+
+//========================================
+// Internal Classes
+//----------------------------------------
+
+    protected class KahaDBMessageStoreTaskCompletionListener implements StoreTaskCompletionListener {
+
+        public long doneTasks = 0;
+        public long canceledTasks = 0;
+
+        @Override
+        public void taskCompleted() {
+            this.doneTasks++;
+        }
+
+        @Override
+        public void taskCanceled() {
+            this.canceledTasks++;
+
+            // Report the canceled task, if enabled
+            if ((KahaDBStore.cancelledTaskModMetric > 0) &&
+                (this.canceledTasks % kahaDBStore.cancelledTaskModMetric == 0)) {
+
+                // TODO: shouldn't this use a logger?
+                System.err.println(KahaDBMessageStore.this.dest.getName() + " cancelled: " +
+                                   this.calcPercentage(this.canceledTasks, this.doneTasks));
+
+                this.canceledTasks = 0;
+                this.doneTasks = 0;
+            }
+        }
+
+        private double calcPercentage(long amount, long total) {
+            return ((double) amount / (double) total) * 100.0;
+        }
+
     }
 }

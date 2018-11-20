@@ -70,7 +70,9 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
             throws IOException {
         if (kahaDBStore.isConcurrentStoreAndDispatchTopics()) {
             message.beforeMarshall(kahaDBStore.wireFormat);
-            StoreTopicTask result = new StoreTopicTask(kahaDBStore,this, context, message, subscriptionCount.get());
+
+            StoreTopicTask result = new StoreTopicTask(kahaDBStore,this, context, message, subscriptionCount.get(),
+                                                       new KahaDBMessageStoreTaskCompletionListener());
             result.aquireLocks();
             kahaDBStore.addTopicTask(this, result);
             return result.getFuture();
