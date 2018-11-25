@@ -69,7 +69,11 @@ public class StoreTopicTask extends StoreQueueTask {
     /**
      * add a key
      *
+<<<<<<< HEAD
      * @param key to add to subscription keys
+=======
+     * @param key
+>>>>>>> bb21dd021799ce0492021997cf5203cb3dbe3678
      * @return true if all acknowledgements received
      */
     public boolean addSubscriptionKey(String key) {
@@ -103,4 +107,5 @@ public class StoreTopicTask extends StoreQueueTask {
             kahaDBStore.removeTopicTask(this.topicStore, this.message.getMessageId());
         }
     }
+
 }

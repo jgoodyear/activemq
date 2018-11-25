@@ -129,6 +129,7 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
         org.apache.activemq.util.ByteSequence packet = kahaDBStore.wireFormat.marshal(subscriptionInfo);
         command.setSubscriptionInfo(new Buffer(packet.getData(), packet.getOffset(), packet.getLength()));
         kahaDBStore.store(command, kahaDBStore.isEnableJournalDiskSyncs(), null, null);
+
         this.subscriptionCount.incrementAndGet();
     }
 
@@ -138,6 +139,7 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
         command.setDestination(dest);
         command.setSubscriptionKey(kahaDBStore.subscriptionKey(clientId, subscriptionName));
         kahaDBStore.store(command, kahaDBStore.isEnableJournalDiskSyncs(), null, null);
+
         this.subscriptionCount.decrementAndGet();
     }
 
@@ -349,6 +351,7 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
                             counter++;
                         }
                         if (counter >= maxReturned || !listener.hasSpace()) {
+
                             break;
                         }
                     }
