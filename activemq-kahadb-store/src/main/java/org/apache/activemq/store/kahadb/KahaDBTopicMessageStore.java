@@ -28,14 +28,8 @@ import org.apache.activemq.store.MessageRecoveryListener;
 import org.apache.activemq.store.MessageStoreSubscriptionStatistics;
 import org.apache.activemq.store.TopicMessageStore;
 import org.apache.activemq.store.kahadb.disk.page.Transaction;
-import org.apache.activemq.store.kahadb.data.KahaAddMessageCommand;
-import org.apache.activemq.store.kahadb.data.KahaDestination;
-import org.apache.activemq.store.kahadb.data.KahaDestination.DestinationType;
-import org.apache.activemq.store.kahadb.data.KahaLocation;
-import org.apache.activemq.store.kahadb.data.KahaRemoveDestinationCommand;
 import org.apache.activemq.store.kahadb.data.KahaRemoveMessageCommand;
 import org.apache.activemq.store.kahadb.data.KahaSubscriptionCommand;
-import org.apache.activemq.store.kahadb.data.KahaUpdateMessageCommand;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -84,7 +78,7 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
     @Override
     public void acknowledge(ConnectionContext context, String clientId, String subscriptionName,
                             MessageId messageId, MessageAck ack) throws IOException {
-        String subscriptionKey = kahaDBStore.subscriptionKey(clientId, subscriptionName).toString();
+        String subscriptionKey = kahaDBStore.subscriptionKey(clientId, subscriptionName);
         if (kahaDBStore.isConcurrentStoreAndDispatchTopics()) {
             KahaDBStore.AsyncJobKey key = new KahaDBStore.AsyncJobKey(messageId, getDestination());
             StoreTopicTask task = null;
@@ -130,11 +124,11 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
                 .getSubscriptionName());
         KahaSubscriptionCommand command = new KahaSubscriptionCommand();
         command.setDestination(dest);
-        command.setSubscriptionKey(subscriptionKey.toString());
+        command.setSubscriptionKey(subscriptionKey);
         command.setRetroactive(retroactive);
         org.apache.activemq.util.ByteSequence packet = kahaDBStore.wireFormat.marshal(subscriptionInfo);
         command.setSubscriptionInfo(new Buffer(packet.getData(), packet.getOffset(), packet.getLength()));
-        kahaDBStore.store(command, kahaDBStore.isEnableJournalDiskSyncs() && true, null, null);
+        kahaDBStore.store(command, kahaDBStore.isEnableJournalDiskSyncs(), null, null);
         this.subscriptionCount.incrementAndGet();
     }
 
@@ -142,8 +136,8 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
     public void deleteSubscription(String clientId, String subscriptionName) throws IOException {
         KahaSubscriptionCommand command = new KahaSubscriptionCommand();
         command.setDestination(dest);
-        command.setSubscriptionKey(kahaDBStore.subscriptionKey(clientId, subscriptionName).toString());
-        kahaDBStore.store(command, kahaDBStore.isEnableJournalDiskSyncs() && true, null, null);
+        command.setSubscriptionKey(kahaDBStore.subscriptionKey(clientId, subscriptionName));
+        kahaDBStore.store(command, kahaDBStore.isEnableJournalDiskSyncs(), null, null);
         this.subscriptionCount.decrementAndGet();
     }
 
@@ -354,7 +348,7 @@ public class KahaDBTopicMessageStore extends KahaDBMessageStore implements Topic
                         if (listener.recoverMessage(kahaDBStore.loadMessage(entry.getValue().location))) {
                             counter++;
                         }
-                        if (counter >= maxReturned || listener.hasSpace() == false) {
+                        if (counter >= maxReturned || !listener.hasSpace()) {
                             break;
                         }
                     }

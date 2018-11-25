@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class StoreQueueTask implements Runnable, StoreTask {
 
-    static final Logger LOG = LoggerFactory.getLogger(StoreQueueTask.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StoreQueueTask.class);
     protected final Message message;
     protected final ConnectionContext context;
     protected final KahaDBStore kahaDBStore;

@@ -71,15 +71,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, NoLocalSubscriptionAware {
-    static final Logger LOG = LoggerFactory.getLogger(KahaDBStore.class);
+
+    private static final Logger LOG = LoggerFactory.getLogger(KahaDBStore.class);
     private static final int MAX_ASYNC_JOBS = BaseDestination.MAX_AUDIT_DEPTH;
 
     public static final String PROPERTY_CANCELED_TASK_MOD_METRIC = "org.apache.activemq.store.kahadb.CANCELED_TASK_MOD_METRIC";
     public static final int cancelledTaskModMetric = Integer.parseInt(System.getProperty(
             PROPERTY_CANCELED_TASK_MOD_METRIC, "0"), 10);
-    public static final String PROPERTY_ASYNC_EXECUTOR_MAX_THREADS = "org.apache.activemq.store.kahadb.ASYNC_EXECUTOR_MAX_THREADS";
+    private static final String PROPERTY_ASYNC_EXECUTOR_MAX_THREADS = "org.apache.activemq.store.kahadb.ASYNC_EXECUTOR_MAX_THREADS";
     private static final int asyncExecutorMaxThreads = Integer.parseInt(System.getProperty(
-            PROPERTY_ASYNC_EXECUTOR_MAX_THREADS, "1"), 10);;
+            PROPERTY_ASYNC_EXECUTOR_MAX_THREADS, "1"), 10);
 
     protected ExecutorService queueExecutor;
     protected ExecutorService topicExecutor;
@@ -177,6 +178,13 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
         this.maxAsyncJobs = maxAsyncJobs;
     }
 
+    /**
+     *
+     * @return the cancelledTaskModMetric
+     */
+    public int getCancelledTaskModMetric() {
+        return this.cancelledTaskModMetric;
+    }
 
     @Override
     protected void configureMetadata() {
@@ -530,9 +538,9 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
     // /////////////////////////////////////////////////////////////////
 
     /**
-     * @param location
-     * @return
-     * @throws IOException
+     * @param location in data store
+     * @return Message
+     * @throws IOException could not load journal record.
      */
     Message loadMessage(Location location) throws IOException {
         try {
@@ -551,8 +559,7 @@ public class KahaDBStore extends MessageDatabase implements PersistenceAdapter, 
             if (!addMessage.hasMessage()) {
                 throw new IOException("Could not load journal record, null message content at location: " + location);
             }
-            Message msg = (Message) wireFormat.unmarshal(new DataInputStream(addMessage.getMessage().newInput()));
-            return msg;
+            return (Message) wireFormat.unmarshal(new DataInputStream(addMessage.getMessage().newInput()));
         } catch (Throwable t) {
             IOException ioe = IOExceptionSupport.create("Unexpected error on journal read at: " + location , t);
             LOG.error("Failed to load message at: {}", location , ioe);

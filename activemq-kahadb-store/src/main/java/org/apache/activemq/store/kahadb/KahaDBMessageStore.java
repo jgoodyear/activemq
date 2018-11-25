@@ -495,7 +495,7 @@ public class KahaDBMessageStore extends AbstractMessageStore {
 
             // Report the canceled task, if enabled
             if ((KahaDBStore.cancelledTaskModMetric > 0) &&
-                (this.canceledTasks % kahaDBStore.cancelledTaskModMetric == 0)) {
+                (this.canceledTasks % kahaDBStore.getCancelledTaskModMetric() == 0)) {
 
                 // TODO: shouldn't this use a logger?
                 System.err.println(KahaDBMessageStore.this.dest.getName() + " cancelled: " +

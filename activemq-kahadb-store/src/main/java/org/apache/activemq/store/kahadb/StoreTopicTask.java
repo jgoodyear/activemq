@@ -27,7 +27,7 @@ import java.util.List;
 
 public class StoreTopicTask extends StoreQueueTask {
 
-    static final Logger LOG = LoggerFactory.getLogger(StoreTopicTask.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StoreTopicTask.class);
     private final int subscriptionCount;
     private final List<String> subscriptionKeys = new ArrayList<String>(1);
     protected final KahaDBStore kahaDBStore;
@@ -69,7 +69,7 @@ public class StoreTopicTask extends StoreQueueTask {
     /**
      * add a key
      *
-     * @param key
+     * @param key to add to subscription keys
      * @return true if all acknowledgements received
      */
     public boolean addSubscriptionKey(String key) {
@@ -102,9 +102,5 @@ public class StoreTopicTask extends StoreQueueTask {
             this.future.setException(t);
             kahaDBStore.removeTopicTask(this.topicStore, this.message.getMessageId());
         }
-    }
-
-    private double calcPercentage(long amount, long total) {
-        return ((double) amount / (double) total) * 100.0;
     }
 }
