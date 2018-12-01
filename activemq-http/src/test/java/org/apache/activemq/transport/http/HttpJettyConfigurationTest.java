@@ -14,27 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.activemq.store.kahadb.disk.index;
 
-import org.apache.activemq.store.kahadb.disk.page.Transaction;
-import org.apache.activemq.store.kahadb.disk.util.LongMarshaller;
-import org.apache.activemq.store.kahadb.disk.util.StringMarshaller;
+package org.apache.activemq.transport.http;
 
-public class HashIndexBenchMark extends IndexBenchmark {
+import org.apache.activemq.broker.BrokerService;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
-    @Override
-    protected Index<String, Long> createIndex() throws Exception {
+public class HttpJettyConfigurationTest {
 
-        Transaction tx = pf.tx();
-        long id = tx.allocate().getPageId();
+    private BrokerService brokerService;
 
-        HashIndex<String, Long> index = new HashIndex<String, Long>(pf, id);
-        index.setKeyMarshaller(StringMarshaller.INSTANCE);
-        index.setValueMarshaller(LongMarshaller.INSTANCE);
-        index.load(tx);
-        tx.commit();
+    @Before
+    public void setUp() throws Exception {
+        brokerService = new BrokerService();
+        brokerService.setPersistent(false);
+        brokerService.setUseJmx(false);
+        brokerService.deleteAllMessages();
+        brokerService.addConnector("http://0.0.0.0:0?jetty.config=src/test/resources/jetty.xml");
+        brokerService.start();
+    }
 
-        return index;
+    @After
+    public void tearDown() throws Exception {
+        brokerService.stop();
+    }
+
+    @Test
+    public void test() throws Exception {
+        // nothing to do
     }
 
 }

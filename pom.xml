@@ -25,7 +25,7 @@
 
   <groupId>org.apache.activemq</groupId>
   <artifactId>activemq-parent</artifactId>
-  <version>5.15.6-SNAPSHOT</version>
+  <version>5.15.9-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>ActiveMQ</name>
   <inceptionYear>2005</inceptionYear>
@@ -89,7 +89,7 @@
     <junit-version>4.12</junit-version>
     <hamcrest-version>1.3</hamcrest-version>
     <jxta-version>2.0</jxta-version>
-    <karaf-version>4.0.9</karaf-version>
+    <karaf-version>4.2.1</karaf-version>
     <leveldb-api-version>0.9</leveldb-api-version>
     <leveldb-version>0.9</leveldb-version>
     <leveldbjni-version>1.8</leveldbjni-version>
@@ -104,11 +104,11 @@
     <p2psockets-version>1.1.2</p2psockets-version>
     <linkedin-zookeeper-version>1.4.0</linkedin-zookeeper-version>
     <zookeeper-version>3.4.6</zookeeper-version>
-    <qpid-proton-version>0.28.0</qpid-proton-version>
-    <qpid-jms-version>0.35.0</qpid-jms-version>
-    <qpid-jms-netty-version>4.1.27.Final</qpid-jms-netty-version>
-    <qpid-jms-proton-version>0.28.0</qpid-jms-proton-version>
-    <netty-all-version>4.1.27.Final</netty-all-version>
+    <qpid-proton-version>0.30.0</qpid-proton-version>
+    <qpid-jms-version>0.38.0</qpid-jms-version>
+    <qpid-jms-netty-version>4.1.31.Final</qpid-jms-netty-version>
+    <qpid-jms-proton-version>0.30.0</qpid-jms-proton-version>
+    <netty-all-version>4.1.31.Final</netty-all-version>
     <regexp-version>1.3</regexp-version>
     <rome-version>1.0</rome-version>
     <saxon-version>9.5.1-5</saxon-version>
@@ -1488,6 +1488,7 @@
             <exclude>**/stomp.js</exclude>
             <exclude>**/__init__.py</exclude>
             <exclude>**/webapp/decorators/footer.jsp</exclude>
+            <exclude>**/testJdbcConfig/**/*</exclude>
           </excludes>
         </configuration>
       </plugin>
